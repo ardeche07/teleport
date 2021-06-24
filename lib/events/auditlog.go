@@ -1076,7 +1076,7 @@ func (c *chunkStream) Read(p []byte) (n int, err error) {
 // StreamSessionEvents streams all events from a given session recording. A subcontext
 // is created from the supplied context and is cancelled if the parent context gets cancelled
 // or the function encounters an error.
-func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID string) (context.Context, chan apievents.AuditEvent) {
+func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID string, startIndex int) (context.Context, chan apievents.AuditEvent) {
 	l.log.Debugf("StreamSessionEvents(%v)", sessionID)
 
 	rawStream := &chunkStream{
@@ -1309,7 +1309,7 @@ func (a *closedLogger) Close() error {
 	return trace.NotImplemented(loggerClosedMessage)
 }
 
-func (a *closedLogger) StreamSessionEvents(_ctx context.Context, sessionID string) (context.Context, chan apievents.AuditEvent) {
+func (a *closedLogger) StreamSessionEvents(_ctx context.Context, sessionID string, startIndex int) (context.Context, chan apievents.AuditEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	cancel()
 	return ctx, make(chan apievents.AuditEvent)
