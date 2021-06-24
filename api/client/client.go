@@ -1387,6 +1387,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 			oneOf, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
+					panic(err)
 					cancel()
 				}
 
@@ -1395,6 +1396,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 
 			event, err := events.FromOneOf(*oneOf)
 			if err != nil {
+				panic(err)
 				cancel()
 				break
 			}
