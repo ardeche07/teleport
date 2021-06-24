@@ -1379,7 +1379,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 		return utils.NewErrContext(trace.Wrap(err)), ch
 	}
 
-	subCtx, cancel := context.WithCancel(ctx)
+	subCtx, cancel := utils.NewCancelWithErrContext(ctx)
 
 	go func() {
 	outer:
@@ -1387,8 +1387,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 			oneOf, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					panic(err)
-					cancel()
+					cancel(err)
 				}
 
 				break outer
@@ -1396,9 +1395,8 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 
 			event, err := events.FromOneOf(*oneOf)
 			if err != nil {
-				panic(err)
-				cancel()
-				break
+				cancel(err)
+				break outer
 			}
 
 			ch <- event
