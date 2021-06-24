@@ -1072,6 +1072,7 @@ func (i *TeleInstance) AddUser(username string, mappings []string) *User {
 	user := &User{
 		Username:      username,
 		AllowedLogins: mappings,
+		Roles:         []types.Role{services.NewAdminRole()},
 	}
 	i.Secrets.Users[username] = user
 	return user
