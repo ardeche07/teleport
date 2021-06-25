@@ -3152,9 +3152,12 @@ func (a *ServerWithRoles) DeleteAllLocks(context.Context) error {
 // channel if one is encountered. Otherwise it is simply closed when the stream ends.
 func (a *ServerWithRoles) StreamSessionEvents(ctx context.Context, sessionID session.ID, startIndex int) (chan apievents.AuditEvent, chan error) {
 	if err := a.action(apidefaults.Namespace, types.KindSession, types.VerbList); err != nil {
-		e, c := make(chan error, 1), make(chan apievents.AuditEvent)
-		e <- trace.Wrap(err)
-		close(c)
+		c, e := make(chan apievents.AuditEvent), make(chan error)
+		go func() {
+			e <- trace.Wrap(err)
+			close(c)
+		}()
+
 		return c, e
 	}
 
