@@ -1080,7 +1080,7 @@ func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID
 
 	rawStream := &chunkStream{
 		log:       l,
-		sessionID: session.ID(sessionID),
+		sessionID: sessionID,
 		readUntil: chunkStreamSize,
 		offset:    0,
 	}
