@@ -1365,7 +1365,7 @@ func (c *Client) DeleteAllNodes(ctx context.Context, namespace string) error {
 }
 
 // StreamSessionEvents streams audit events from a given session recording.
-func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, startIndex int) (context.Context, chan events.AuditEvent) {
+func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, startIndex int) (chan error, chan events.AuditEvent) {
 	request := &proto.StreamSessionEventsRequest{
 		SessionID:  sessionID,
 		StartIndex: int32(startIndex),
@@ -1376,11 +1376,12 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 	stream, err := c.grpc.StreamSessionEvents(ctx, request)
 	if err != nil {
 		close(ch)
-		err := trace.Wrap(trail.FromGRPC(err))
-		return utils.NewErrContext(err), ch
+		e := make(chan error, 1)
+		e <- trace.Wrap(trail.FromGRPC(err))
+		return e, ch
 	}
 
-	subCtx, cancel := utils.NewCancelWithErrContext(ctx)
+	e := make(chan error)
 
 	go func() {
 	outer:
@@ -1388,7 +1389,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 			oneOf, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					cancel(trail.FromGRPC(err))
+					e <- trace.Wrap(trail.FromGRPC(err))
 				}
 
 				break outer
@@ -1396,7 +1397,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 
 			event, err := events.FromOneOf(*oneOf)
 			if err != nil {
-				cancel(err)
+				e <- trace.Wrap(trail.FromGRPC(err))
 				break outer
 			}
 
@@ -1406,7 +1407,7 @@ func (c *Client) StreamSessionEvents(ctx context.Context, sessionID string, star
 		close(ch)
 	}()
 
-	return subCtx, ch
+	return e, ch
 }
 
 // SearchEvents allows searching for events with a full pagination support.

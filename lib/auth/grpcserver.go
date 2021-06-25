@@ -2665,12 +2665,12 @@ func (g *GRPCServer) ResetAuthPreference(ctx context.Context, _ *empty.Empty) (*
 
 // Streams events from a session recording.
 func (g *GRPCServer) StreamSessionEvents(req *proto.StreamSessionEventsRequest, stream proto.AuthService_StreamSessionEventsServer) error {
-	auth, err := g.authenticate(context.TODO())
+	auth, err := g.authenticate(stream.Context())
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
-	ctx, c := auth.ServerWithRoles.StreamSessionEvents(context.TODO(), req.SessionID, int(req.StartIndex))
+	e, c := auth.ServerWithRoles.StreamSessionEvents(stream.Context(), req.SessionID, int(req.StartIndex))
 
 	for {
 		select {
@@ -2687,9 +2687,8 @@ func (g *GRPCServer) StreamSessionEvents(req *proto.StreamSessionEventsRequest, 
 			if err := stream.Send(oneOf); err != nil {
 				return trail.ToGRPC(trace.Wrap(err))
 			}
-		case <-ctx.Done():
-			close(c)
-			return trail.ToGRPC(trace.Wrap(ctx.Err()))
+		case err := <-e:
+			return trail.ToGRPC(trace.Wrap(err))
 		}
 	}
 }
