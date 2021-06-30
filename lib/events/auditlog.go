@@ -1046,7 +1046,7 @@ func (l *AuditLog) SearchSessionEvents(fromUTC, toUTC time.Time, limit int, orde
 // channel if one is encountered. Otherwise it is simply closed when the stream ends.
 func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID, startIndex int) (chan apievents.AuditEvent, chan error) {
 	l.log.Debugf("StreamSessionEvents(%v)", sessionID)
-	e := make(chan error)
+	e := make(chan error, 1)
 	c := make(chan apievents.AuditEvent)
 
 	tarballPath := filepath.Join(l.playbackDir, string(sessionID)+".tar")
@@ -1058,15 +1058,16 @@ func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID
 		select {
 		case <-downloadCtx.Done():
 		case <-l.ctx.Done():
-			go func() {
-				e <- trace.BadParameter("audit log is closing, aborting the download")
-				close(c)
-			}()
+			e <- trace.BadParameter("audit log is closing, aborting the download")
 			return c, e
 		}
 	}
 	defer cancel()
 	rawSession, err := os.OpenFile(tarballPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0640)
+	if err != nil {
+		e <- trace.Wrap(err)
+		return c, e
+	}
 
 	start := time.Now()
 	if err := l.UploadHandler.Download(l.ctx, sessionID, rawSession); err != nil {
@@ -1075,27 +1076,19 @@ func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID
 			l.log.WithError(rmErr).Warningf("Failed to remove file %v.", tarballPath)
 		}
 
-		go func() {
-			e <- trace.Wrap(err)
-			close(c)
-		}()
+		e <- trace.Wrap(err)
 		return c, e
 	}
 
 	l.log.WithField("duration", time.Since(start)).Debugf("Downloaded %v to %v.", sessionID, tarballPath)
 	_, err = rawSession.Seek(0, 0)
 	if err != nil {
-		go func() {
-			e <- trace.Wrap(err)
-			close(c)
-		}()
+		e <- trace.Wrap(err)
+		return c, e
 	}
 
 	if err != nil {
-		go func() {
-			e <- trace.Wrap(err)
-			close(c)
-		}()
+		e <- trace.Wrap(err)
 		return c, e
 	}
 
@@ -1105,7 +1098,6 @@ func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID
 		for {
 			if ctx.Err() != nil {
 				e <- trace.Wrap(ctx.Err())
-				close(c)
 				break
 			}
 
@@ -1113,9 +1105,10 @@ func (l *AuditLog) StreamSessionEvents(ctx context.Context, sessionID session.ID
 			if err != nil {
 				if err != io.EOF {
 					e <- trace.Wrap(err)
+				} else {
+					close(c)
 				}
 
-				close(c)
 				break
 			}
 
@@ -1324,11 +1317,8 @@ func (a *closedLogger) Close() error {
 }
 
 func (a *closedLogger) StreamSessionEvents(_ctx context.Context, sessionID session.ID, startIndex int) (chan apievents.AuditEvent, chan error) {
-	c, e := make(chan apievents.AuditEvent), make(chan error)
-	go func() {
-		e <- trace.NotImplemented(loggerClosedMessage)
-		close(c)
-	}()
+	c, e := make(chan apievents.AuditEvent), make(chan error, 1)
+	e <- trace.NotImplemented(loggerClosedMessage)
 
 	return c, e
 }
